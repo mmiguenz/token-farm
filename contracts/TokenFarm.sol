@@ -40,9 +40,9 @@ contract TokenFarm {
         constructor
      */ 
     constructor(DappToken _dappToken, LPToken _lpToken) {
-        // Set the owner to the creator of this contract
-        // Set the instance of the deployed Dapp and LP contracts
-
+        owner = msg.sender;
+        dappToken = DappToken(_dappToken);
+        lpToken = LPToken(_lpToken);
     }
 
     /**
@@ -51,11 +51,13 @@ contract TokenFarm {
      */
     function deposit(uint256 _amount) public {
         // Require amount greater than 0
+        require(_amount > 0, "Deposit amount should be greater than 0");
 
         // Trasnfer Mock LP Tokens to this contract for staking
+        lpToken.transferFrom(msg.sender, address(this), _amount);
 
         // Update staking balance
-
+        
         // Add user to stakers array only if they haven't staked already
 
         // Update staking status
