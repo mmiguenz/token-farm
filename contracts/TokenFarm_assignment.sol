@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.4;
+pragma solidity 0.8.9;
 
 import "./DappToken.sol";
 import "./LPToken.sol";
@@ -7,10 +7,11 @@ import "./LPToken.sol";
 /**
     A super simple token farm 
 */
+
 contract TokenFarm {
 
     // State variables
-
+ 
     string public name = "Simple Token Farm";
 
     address public owner;   
@@ -62,7 +63,8 @@ contract TokenFarm {
         // checkpoint block number
 
         // calculate rewards
-        distributeRewards();
+       
+       //  distributeRewards();
 
         // emit some event
     }
@@ -75,12 +77,13 @@ contract TokenFarm {
         // check is sender is staking
 
         // Fetch staking balance
-        uint256 balance =;
+        uint256 balance = 0;
 
         // Require amount greater than 0
 
         // calculate rewards before reseting staking balance
-        distributeRewards();
+        
+        // distributeRewards();
 
         // Reset staking balance
 
@@ -129,7 +132,7 @@ contract TokenFarm {
      */
     function distributeRewards(address beneficiary) private {
         // get las checkpoint block
-
+        uint16 checkpoint = 0;
         // calculates rewards:
         if (block.number > checkpoint) {
             // reward = 
@@ -137,6 +140,7 @@ contract TokenFarm {
             // ...
         }
     }
+    
 }
 
 // REWARD_PER_BLOCK = 1
