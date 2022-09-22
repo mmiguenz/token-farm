@@ -15,8 +15,8 @@ contract TokenFarm {
     string public name = "Simple Token Farm";
 
     address public owner;   
-    DappToken public dappToken; //mock platform reward token
-    LPToken public lpToken; // mock LP Token staked by users
+    IERC20 public dappToken; //mock platform reward token
+    IERC20 public lpToken; // mock LP Token staked by users
 
     // rewards per block
     uint256 public constant REWARD_PER_BLOCK = 1e18;
@@ -39,10 +39,10 @@ contract TokenFarm {
     /**
         constructor
      */ 
-    constructor(DappToken _dappToken, LPToken _lpToken) {
+    constructor(address _dappToken, address _lpToken) {
         owner = msg.sender;
-        dappToken = DappToken(_dappToken);
-        lpToken = LPToken(_lpToken);
+        dappToken = IERC20(_dappToken);
+        lpToken = IERC20(_lpToken);
     }
 
     /**
@@ -51,19 +51,33 @@ contract TokenFarm {
      */
     function deposit(uint256 _amount) public {
         // Require amount greater than 0
-        require(_amount > 0, "Deposit amount should be greater than 0");
+        require(_amount  > 0, "Deposit amount should be greater than 0");
+
+
+        require(lpToken.balanceOf(msg.sender) >= _amount, "insuficient funds");
 
         // Trasnfer Mock LP Tokens to this contract for staking
-        lpToken.transferFrom(msg.sender, address(this), _amount);
+        bool succces = lpToken.transferFrom(msg.sender, address(this), _amount);
+       
+        if(!succces) {
+            revert();
+        }
+
+       
+       // 
 
         // Update staking balance
-        
+        stakingBalance[msg.sender] = stakingBalance[msg.sender] + _amount;
         // Add user to stakers array only if they haven't staked already
 
         // Update staking status
+        if(!isStaking[msg.sender]) {
+            stakers.push(msg.sender);
+            isStaking[msg.sender] = true;
+        }
 
         // checkpoint block number
-
+      
         // calculate rewards
        
        //  distributeRewards();
