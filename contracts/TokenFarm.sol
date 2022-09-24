@@ -32,6 +32,9 @@ contract TokenFarm {
 
     // Events - add events as needed
 
+     event Staked(address indexed _from, uint256 _value);
+     event Withdrawn(address indexed _from, uint256 _value);
+
     /**
         constructor
      */
@@ -75,6 +78,7 @@ contract TokenFarm {
         //  distributeRewards();
 
         // emit some event
+        emit Staked(msg.sender, _amount);
     }
 
     /**
@@ -101,6 +105,8 @@ contract TokenFarm {
 
         // Transfer LP Tokens to user
         lpToken.transfer(msg.sender, balance);
+        
+        emit Withdrawn(msg.sender, balance);
     }
 
     /**
