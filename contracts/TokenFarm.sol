@@ -18,8 +18,8 @@ contract TokenFarm {
     IERC20 public lpToken; // mock LP Token staked by users
 
     // rewards per block
-    uint256 public constant REWARD_PER_BLOCK = 1e18;
-
+    uint256 public constant REWARD_PER_BLOCK =1e18;
+    uint256 public totalStaked = 0;
     // iterable list of staking users
     address[] public stakers;
 
@@ -31,9 +31,10 @@ contract TokenFarm {
     mapping(address => bool) public isStaking;
 
     // Events - add events as needed
-
-     event Staked(address indexed _from, uint256 _value);
-     event Withdrawn(address indexed _from, uint256 _value);
+    event Staked(address indexed _from, uint256 _value);
+    event Withdrawn(address indexed _from, uint256 _value);
+    event Reward(address indexed _to, uint256 _value);
+    event RewardTransfered(address indexed _to, uint256 _value);
 
     /**
         constructor
@@ -54,6 +55,8 @@ contract TokenFarm {
 
         require(lpToken.balanceOf(msg.sender) >= _amount, "insuficient funds");
 
+        distributeRewards(msg.sender);
+
         // Trasnfer Mock LP Tokens to this contract for staking
         bool succces = lpToken.transferFrom(msg.sender, address(this), _amount);
 
@@ -63,23 +66,17 @@ contract TokenFarm {
         }
         // Update staking balance
         stakingBalance[msg.sender] = stakingBalance[msg.sender] + _amount;
+        totalStaked = totalStaked + _amount;
         // Add user to stakers array only if they haven't staked already
 
         // Update staking status
         if (!isStaking[msg.sender]) {
             stakers.push(msg.sender);
             isStaking[msg.sender] = true;
-        }
-
-        // checkpoint block number
-
-        // calculate rewards
-
-        //  distributeRewards();
-
+        }      
         // emit some event
         emit Staked(msg.sender, _amount);
-    }
+    }  
 
     /**
      @notice Withdraw
@@ -95,17 +92,18 @@ contract TokenFarm {
 
         // calculate rewards before reseting staking balance
 
-        // distributeRewards();
+        distributeRewards(msg.sender);
 
         // Reset staking balance
         stakingBalance[msg.sender] = 0;
+        totalStaked = totalStaked - balance;
         // Update staking status
         isStaking[msg.sender] = false;
-        // emit some event
 
         // Transfer LP Tokens to user
-        lpToken.transfer(msg.sender, balance);
-        
+        lpToken.transfer(msg.sender, balance);       
+      
+        // emit some event
         emit Withdrawn(msg.sender, balance);
     }
 
@@ -115,11 +113,19 @@ contract TokenFarm {
      Pendig rewards are minted to the user
      */
     function claimRewards() public {
+        uint256 pendingReward = pendigRewards[msg.sender];
+        require(pendingReward > 0, "User has not any pending reward to claim");
+
         // fetch pendig rewards
         // check if user has pending rewards
         // reset pendig rewards balance
         // mint rewards tokens to user
         // emit some event
+        
+        dappToken.transfer(msg.sender, pendingReward);
+        emit RewardTransfered(msg.sender, pendingReward);
+
+        pendigRewards[msg.sender] = 0;        
     }
 
     /**
@@ -128,9 +134,13 @@ contract TokenFarm {
      Only owner can call this function
      */
     function distributeRewardsAll() external {
-        // set rewards to all stakers
-        // in this case the iterable list of staking users could be useful
-        // emit some event
+        for (
+            uint256 staker_index = 0;
+            staker_index < stakers.length;
+            staker_index++
+        ) {
+          distributeRewards(stakers[staker_index]);
+        }
     }
 
     /**
@@ -138,14 +148,28 @@ contract TokenFarm {
      calculates rewards for the indicated beneficiary 
      */
     function distributeRewards(address beneficiary) private {
-        // get las checkpoint block
-        uint16 checkpoint = 0;
-        // calculates rewards:
-        if (block.number > checkpoint) {
-            // reward =
-            // updates pendig rewards and block number checkpoint
-            // ...
+        address staker_address = beneficiary;
+        uint256 checkpoint = checkpoints[staker_address];
+
+        if (
+            isStaking[staker_address] &&
+            checkpoint > 0 && 
+            block.number > checkpoint
+        ) {
+            uint256 reward = (block.number - checkpoint) * REWARD_PER_BLOCK;
+
+            if (reward > 0) {
+                uint256 userReward = (reward / totalStaked) *
+                    stakingBalance[staker_address];
+
+                pendigRewards[staker_address] =
+                    pendigRewards[staker_address] +
+                    userReward;
+                emit Reward(staker_address, userReward);
+            }
         }
+        
+        checkpoints[staker_address] = block.number;
     }
 }
 

@@ -3,7 +3,7 @@ import { loadFixture } from "@nomicfoundation/hardhat-network-helpers";
 import { expect } from "chai";
 import { BigNumber, ContractTransaction } from "ethers";
 import { ethers } from "hardhat";
-import { TokenFarm } from "../typechain-types";
+import { DappToken, TokenFarm } from "../typechain-types";
 import { LPToken } from "../typechain-types/contracts/LPToken";
 
 describe("TokenFarm", function () {
@@ -12,7 +12,7 @@ describe("TokenFarm", function () {
   // and reset Hardhat Network to that snapshot in every test.
   async function deployTokenFarmFixture() {
     // Contracts are deployed using the first signer/account by default
-    const [owner, otherAccount] = await ethers.getSigners();
+    const [owner, otherAccount, otherAccount2, otherAccount3] = await ethers.getSigners();
 
     const DappToken = await ethers.getContractFactory("DappToken");
     const dappToken = await DappToken.deploy();
@@ -26,9 +26,14 @@ describe("TokenFarm", function () {
     const tokenFarm = await TokenFarm.deploy(dappToken.address, lPToken.address);
     await tokenFarm.deployed();
 
-    await lPToken.transfer(otherAccount.address, ethers.BigNumber.from("10000000000000000000"))
+    await dappToken.transfer(tokenFarm.address, await dappToken.totalSupply())
 
-    return { tokenFarm, lPToken, dappToken, owner, otherAccount };
+    await lPToken.transfer(otherAccount.address, ethers.BigNumber.from("10000000000000000000"))
+    await lPToken.transfer(otherAccount2.address, ethers.BigNumber.from("10000000000000000000"))
+    await lPToken.transfer(otherAccount3.address, ethers.BigNumber.from("10000000000000000000"))
+
+
+    return { tokenFarm, lPToken, dappToken, owner, otherAccount, otherAccount2, otherAccount3 };
   }
   describe("Deployment", function () {
 
@@ -47,15 +52,16 @@ describe("TokenFarm", function () {
   describe("Deposit", function () {
     it("Should transfer tokens from sender", async function () {
       const { tokenFarm, lPToken, dappToken, owner, otherAccount } = await loadFixture(deployTokenFarmFixture);
-      let amoutForStaking = ethers.BigNumber.from("10000000000000000000");
+      let amountForStaking = ethers.BigNumber.from("10000000000000000000");
 
-      await givenApprovedLPTokens(lPToken, otherAccount, tokenFarm.address, amoutForStaking)
+      await givenApprovedLPTokens(lPToken, otherAccount, tokenFarm.address, amountForStaking)
 
-      const transaction = await whenDeposit(tokenFarm, otherAccount, amoutForStaking)
+      const transaction = await whenDeposit(tokenFarm, otherAccount, amountForStaking)
 
-      await shouldStakeLPTokens(tokenFarm, lPToken, otherAccount.address, amoutForStaking)
+      await shouldStakeLPTokens(tokenFarm, lPToken, otherAccount.address, amountForStaking)
 
-      await shouldEmitStakedEvent(transaction, tokenFarm, otherAccount.address, amoutForStaking)
+      await shouldEmitStakedEvent(transaction, tokenFarm, otherAccount.address, amountForStaking)
+      await shouldUpdateTotalStaked(tokenFarm, amountForStaking);
 
     });
 
@@ -94,6 +100,7 @@ describe("TokenFarm", function () {
 
       await shouldRecoverLPTokens(tokenFarm, lPToken, otherAccount.address, amoutForWithdraw)
       await shouldEmitWithdrawnEvent(transaction, tokenFarm, otherAccount.address, amoutForWithdraw)
+      await shouldUpdateTotalStaked(tokenFarm, BigNumber.from(0));
     });
 
     const givenAStakedContract =
@@ -123,4 +130,81 @@ describe("TokenFarm", function () {
       await expect(transaction).to.emit(tokenFarm, "Withdrawn").withArgs(stakerAddress, amount)
     }
   });
+
+
+  describe("claim rewards", function () {
+    it("Should get dapp token transfered", async function () {
+      const { tokenFarm, lPToken, dappToken, owner, otherAccount, otherAccount2 } = await loadFixture(deployTokenFarmFixture);
+
+      await givenAStakedContract(tokenFarm, lPToken, otherAccount, otherAccount2)
+      await mineNBlocks(50);
+
+      const transaction = await whenClaimRewards(tokenFarm, otherAccount)
+
+      const expectedReward = BigNumber.from("30000000000000000000")
+      await shouldGetDappTokensTransfered(dappToken, otherAccount.address, expectedReward)
+      await shouldEmitRewardTransfered(transaction, tokenFarm, otherAccount.address, expectedReward)
+    });
+
+    const givenAStakedContract =
+      async (tokenFarm: TokenFarm, lPToken: LPToken, accountStaker: any, accountStaker2: any) => {
+        let amoutForStaking1 = ethers.BigNumber.from("10000000000000000000");
+        let amoutForStaking2 = ethers.BigNumber.from("5000000000000000000");
+        await lPToken
+          .connect(accountStaker)
+          .approve(tokenFarm.address, amoutForStaking1)
+
+        await lPToken
+          .connect(accountStaker)
+          .approve(tokenFarm.address, amoutForStaking1)
+
+        await tokenFarm
+          .connect(accountStaker)
+          .deposit(amoutForStaking1)
+
+        await lPToken
+          .connect(accountStaker2)
+          .approve(tokenFarm.address, amoutForStaking2)
+
+        await lPToken
+          .connect(accountStaker2)
+          .approve(tokenFarm.address, amoutForStaking2)
+
+        await tokenFarm
+          .connect(accountStaker2)
+          .deposit(amoutForStaking2)
+      }
+
+    const mineNBlocks = async (n: Number) => {
+      for (let index = 0; index < n; index++) {
+        await ethers.provider.send("evm_mine", [])
+      }
+    }
+
+    const whenClaimRewards =
+      async (tokenFarm: TokenFarm, account: any) => {
+
+        await tokenFarm
+          .connect(account)
+          .distributeRewardsAll()
+
+        return await tokenFarm
+          .connect(account)
+          .claimRewards()
+      }
+
+
+    const shouldGetDappTokensTransfered = async (dappToken: DappToken, stakerAddress: string, amount: BigNumber) => {
+      expect(await dappToken.balanceOf(stakerAddress)).to.equal(amount);
+    }
+
+    const shouldEmitRewardTransfered = async (transaction: ContractTransaction, tokenFarm: TokenFarm, stakerAddress: string, amount: BigNumber) => {
+      await expect(transaction).to.emit(tokenFarm, "RewardTransfered").withArgs(stakerAddress, amount)
+    }
+  });
+
+  const shouldUpdateTotalStaked = async (tokenFarm: TokenFarm, amount: BigNumber) => {
+    const totalStaked = await tokenFarm.totalStaked()
+    expect(totalStaked).to.equal(amount)
+  }
 });
