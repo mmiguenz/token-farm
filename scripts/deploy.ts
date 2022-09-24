@@ -14,7 +14,7 @@ async function main() {
   const tokenFarm = await TokenFarm.deploy(dappToken.address, lPToken.address);
   await tokenFarm.deployed();
 
-  tokenFarm.deposit(10);
+  await dappToken.transfer(tokenFarm.address, await dappToken.totalSupply())
 }
 
 // We recommend this pattern to be able to use async/await everywhere
